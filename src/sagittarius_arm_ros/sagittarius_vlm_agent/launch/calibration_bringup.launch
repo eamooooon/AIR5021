@@ -1,0 +1,27 @@
+<launch>
+  <arg name="robot_name" default="sgr532"/>
+  <arg name="robot_model" default="$(arg robot_name)"/>
+  <arg name="video_dev" default="/dev/usb_cam"/>
+  <arg name="ros_log_dir" default="/home/robotics/Team1/logs/ros"/>
+  <arg name="motion_velocity_scaling" default="0.5"/>
+  <arg name="motion_acceleration_scaling" default="0.5"/>
+  <arg name="motion_execute_wait" default="0.08"/>
+
+  <env name="ROS_LOG_DIR" value="$(arg ros_log_dir)"/>
+
+  <include file="$(find sagittarius_moveit)/launch/demo_true.launch">
+    <arg name="robot_name" value="$(arg robot_name)"/>
+    <arg name="robot_model" value="$(arg robot_model)"/>
+  </include>
+
+  <node pkg="sagittarius_vlm_agent" type="sgr_ctrl.py" name="sgr_ctrl_node" output="screen" ns="$(arg robot_name)">
+    <param name="init_pose" value="false"/>
+    <param name="max_velocity_scaling" value="$(arg motion_velocity_scaling)"/>
+    <param name="max_acceleration_scaling" value="$(arg motion_acceleration_scaling)"/>
+    <param name="execute_wait" value="$(arg motion_execute_wait)"/>
+  </node>
+
+  <include file="$(find sagittarius_vlm_agent)/launch/usb_cam.launch">
+    <arg name="video_dev" value="$(arg video_dev)"/>
+  </include>
+</launch>

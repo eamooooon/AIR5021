@@ -43,6 +43,10 @@ catkin_install_python(
     nodes/camera_intrinsics_calibration.py
     nodes/hand_eye_calibration_tool.py
     nodes/test_hand_eye_calibration.py
+    nodes/verify_calibration.py
+    nodes/live_verify_calibration.py
+    nodes/interactive_hand_eye_verify.py
+    nodes/collect_hand_eye_samples.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

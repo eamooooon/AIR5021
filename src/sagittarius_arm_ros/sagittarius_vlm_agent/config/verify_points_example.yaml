@@ -1,0 +1,5 @@
+plane_z: 0.02
+points:
+  - label: example_center_point
+    pixel: [320.0, 240.0]
+    expected_xy: [0.20, 0.00]

@@ -47,14 +47,19 @@ robot:
   grasp_payload_threshold: 24
   recenter_enabled: true
   recenter_margin_px: 18
-  recenter_max_attempts: 2
+  recenter_max_attempts: 5
   recenter_camera_moves_with_arm: true
-  recenter_max_step_xy: 0.06
+  recenter_delta_x_sign: -1.0
+  recenter_delta_y_sign: 1.0
+  recenter_max_step_xy: 0.10
   recenter_min_step_xy: 0.004
   recenter_min_x: -0.05
   recenter_max_x: 0.28
   recenter_min_y: -0.22
   recenter_max_y: 0.22
+  observe_search_x_values: [0.20, 0.14, 0.26]
+  observe_search_y_values: [0.00, -0.12, 0.12]
+  observe_search_settle_sec: 0.5
   place_slots:
     - [0.00, 0.20]
     - [0.00, 0.16]
