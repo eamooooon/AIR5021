@@ -1,0 +1,87 @@
+我运行下列内容，结果报错，你尝试运行，查看输出信息之后分析并修改。
+source /home/robotics/Team1/devel/setup.bash
+我当前的命令是：
+roslaunch sagittarius_object_color_detector vlm_prompt_grasp.launch \
+  prompt:="抓取绿色方块，放到红色方块上" \
+  api_base:="https://api.aibold.art/v1" \
+  openai_api_key:="your-api-key-3" \
+  model:="gpt-5.4"
+但是到模型推理的时候报错404，但是我明确这个url和key是正确的，且可以调用运行对话。写一个单独的脚本来测试这个api调用是否成功。
+
+调整测试脚本，用api地址https://api.aibold.art/v1，并且测试图像输入
+进一步修改测试，并且确认输出的文本内容。
+
+
+vlm_clean
+
+roslaunch sagittarius_vlm_cleaner vlm_clean_desk.launch \
+    prompt:="clean the desk by picking all visible objects one by one and placing them into the storage area" \
+    api_base:="https://api.aibold.art/v1" \
+    openai_api_key:="your-api-key-3" \
+    model:="gpt-5.4"
+我在执行这个任务的时候报错了，查看报错原因。
+
+source /home/robotics/Team1/devel/setup.bash
+export ROS_HOME=/tmp/ros_home
+export ROS_LOG_DIR=/tmp/ros_logs
+mkdir -p "$ROS_HOME" "$ROS_LOG_DIR"
+
+roslaunch sagittarius_vlm_cleaner vlm_clean_desk.launch \
+  prompt:="clean the desk by picking all visible objects one by one and placing them into the storage area" \
+  api_base:="https://api.aibold.art/v1" \
+  openai_api_key:="your-api-key-3" \
+  model:="gpt-5.4"
+
+我运行完你给的指令后，仍然报错，你查看报错内容。
+
+在我实际的运行中，我放置了四个物品，但是只拾取了两个。我需要你添加图像保存结果，并在图像上绘制必要的检测结果信息，并方便后续report的汇报。
+
+我在配置中设置了存储和存储路径，但是没有保存结果
+
+现在这个任务算基本完成了，开始拓展新的任务。下一个任务为根据大模型的prompt，给到机械臂运动的轨迹。例如让机械臂画一个圈，然后机械臂完成圆周运动。
+在这基础上，现在我需要的是一个.launch文件执行不同的任务，根据prompt指令来判断任务目标。你根据最优的文件管理方案，来完成代码生成和修改。
+
+source /home/robotics/Team1/devel/setup.bash
+roslaunch sagittarius_vlm_task_router vlm_task.launch \
+  prompt:="clean the objects, whose color is green or blue." \
+  api_base:="https://api.aibold.art/v1" \
+  openai_api_key:="your-api-key-3" \
+  model:="gpt-5.4"
+
+重新修改一下任务，把原来的机械臂运动任务换成一个绘画任务，即获在vlm获取到图像后，在当前图像上绘制用户提示词给出图案的轨迹，然后机械臂进行轨迹规划。
+机械臂需要用grasper夹住一个现实中的笔，然后规划轨迹让笔进行绘图。
+
+还是重新修改回让机械臂做与prompt描述一样的机械臂运动任务，例如挥手、转圈。这里需要你来考量怎么从prompt到vlm到设备的控制。删去先前说的用笔绘制的任务。
+
+roslaunch sagittarius_vlm_task_router vlm_task.launch \
+  prompt:="rotate the wrist twice"
+
+当前我测试了点头和转手腕的任务，其中点头任务的轨迹没有体现出点头，转手腕使用的prompt是rotate the wrist twice，但是系统没有检测到任务类型为转手腕。你还需要进行自然的轨迹控制
+
+再执行这个draw circle的任务
+roslaunch sagittarius_vlm_task_router vlm_task.launch \
+  prompt:="Draw a circle" \
+  api_base:="https://api.aibold.art/v1" \
+  openai_api_key:="your-api-key-3" \
+  model:="gpt-5.4"
+
+
+你尝试运行，我运行后没有进行规划动作。
+
+测试了点头任务，点头任务失败。转动手腕这里修改一下，需要转动joint部分，当前移动的是靠近grpaer的部分，而且范围特别小，看不出，我需要你修改为转动arm
+
+当前转动手腕的动作呈现出的效果是一顿一顿的，我需要的效果是：例如我提出rotate the wrist twice，应该是设置两次转动目标点，对于每个目标点，机械臂一次性到达。
+
+把所有的动作单次完成都设置为一次到达，而不作插值卡顿。
+
+所有的动作速度再快一些，幅度再大一点
+
+当前draw a circle的动作在运行时会有卡顿，不连贯。
+
+点头的动作不连贯，当前一个点头动作有两次停顿，应当是低头、抬头为一整个动作。
+
+点头的动作，包括所有的动作不是固定次数，而是根据模型输出的结果来判断的。刚刚我问了一个问题:f you agree with me, what action do you choose? nod or shake hand?，那按理它应当输出一次，而不是两次。
+
+现在，我需要依次执行任务，并记录中间结果和大模型输出内容和图片，需要进行presentation的汇报。接下来我会告诉你需要执行的任务，你帮我记录结果，并告诉我保存位置。
+
+重新执行，上一次任务的效果不好。

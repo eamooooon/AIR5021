@@ -1,0 +1,2 @@
+roslaunch sagittarius_vlm_agent vlm_agent.launch \
+  prompt:="pick up the green block" 

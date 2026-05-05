@@ -1,0 +1,44 @@
+agent:
+  model: "mimo-v2.5-pro"
+  api_base: "https://token-plan-cn.xiaomimimo.com/v1"
+  openai_api_key: "tp-ctglrprs1ak3ah1jj4ar61fns9cx64kz22yl00s0xvxp0sbk"
+  request_timeout: 30.0
+  max_steps: 10
+  execution_mode: "auto"
+  save_results: true
+  results_dir: "/home/robotics/Team1/logs"
+  min_confidence: 0.35
+  debug_image: true
+
+robot:
+  robot_name: "sgr532"
+  arm_name: "sgr532"
+  image_topic: "/usb_cam/image_raw"
+  action_wait_timeout: 30.0
+  move_group_wait_timeout: 15.0
+  servo_info_wait_timeout: 15.0
+  default_pick_roll: 0.0
+  default_pick_pitch: 1.57
+  default_pick_yaw: 0.0
+  observe_x: 0.20
+  observe_y: 0.00
+  observe_z: 0.15
+  pick_z: 0.02
+  pre_grasp_offset_z: 0.05
+  lift_offset_z: 0.08
+  place_z: 0.05
+  place_roll: 0.0
+  place_pitch: 1.57
+  place_yaw: 1.57
+  open_gripper_width: 0.0
+  grasp_close_width: -0.021
+  min_gripper_width: -0.021
+  max_gripper_width: 0.0
+  grasp_payload_threshold: 24
+  place_slots:
+    - [0.00, 0.20]
+    - [0.00, 0.16]
+    - [0.00, 0.12]
+    - [0.00, 0.08]
+    - [0.00, 0.04]
+    - [0.00, 0.00]

@@ -1,0 +1,78 @@
+[
+  {
+    "success": true,
+    "bbox": [
+      177,
+      210,
+      337,
+      371
+    ],
+    "grasp_pixel": [
+      258,
+      290
+    ],
+    "area": 21278.0,
+    "fill_ratio": 0.8260093167701863,
+    "aspect": 0.9937888198757764,
+    "threshold": 141.0,
+    "candidate_count": 1,
+    "image": "logs/vlm_agent/20260504_171420/step_001_raw.jpg"
+  },
+  {
+    "success": true,
+    "bbox": [
+      198,
+      95,
+      349,
+      257
+    ],
+    "grasp_pixel": [
+      273,
+      176
+    ],
+    "area": 22150.5,
+    "fill_ratio": 0.9055064998773608,
+    "aspect": 0.9320987654320988,
+    "threshold": 141.0,
+    "candidate_count": 1,
+    "image": "logs/vlm_agent/20260504_173939/step_001_raw.jpg"
+  },
+  {
+    "success": true,
+    "bbox": [
+      363,
+      356,
+      553,
+      480
+    ],
+    "grasp_pixel": [
+      457,
+      423
+    ],
+    "area": 18230.0,
+    "fill_ratio": 0.7737691001697793,
+    "aspect": 1.532258064516129,
+    "threshold": 134.0,
+    "candidate_count": 1,
+    "image": "logs/vlm_agent/20260504_174140/step_001_raw.jpg"
+  },
+  {
+    "success": true,
+    "bbox": [
+      363,
+      357,
+      554,
+      480
+    ],
+    "grasp_pixel": [
+      458,
+      423
+    ],
+    "area": 18169.5,
+    "fill_ratio": 0.7734005874090154,
+    "aspect": 1.5528455284552845,
+    "threshold": 133.0,
+    "candidate_count": 1,
+    "image": "logs/vlm_agent/20260504_174223/step_001_raw.jpg"
+  }
+]

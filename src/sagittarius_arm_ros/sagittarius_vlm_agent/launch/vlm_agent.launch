@@ -1,0 +1,44 @@
+<launch>
+  <arg name="robot_name" default="sgr532"/>
+  <arg name="robot_model" default="$(arg robot_name)"/>
+  <arg name="video_dev" default="/dev/usb_cam"/>
+  <arg name="prompt" default="pick up the green block"/>
+  <arg name="model" default=""/>
+  <arg name="api_base" default=""/>
+  <arg name="openai_api_key" default=""/>
+  <arg name="vision_config" default="$(find sagittarius_object_color_detector)/config/vision_config.yaml"/>
+  <arg name="agent_config" default="$(find sagittarius_vlm_agent)/config/agent.yaml"/>
+  <arg name="ros_log_dir" default="/home/robotics/Team1/logs/ros"/>
+  <arg name="motion_velocity_scaling" default="0.8"/>
+  <arg name="motion_acceleration_scaling" default="0.8"/>
+  <arg name="motion_execute_wait" default="0.08"/>
+
+  <env name="ROS_LOG_DIR" value="$(arg ros_log_dir)"/>
+
+  <include file="$(find sagittarius_moveit)/launch/demo_true.launch">
+    <arg name="robot_name" value="$(arg robot_name)"/>
+    <arg name="robot_model" value="$(arg robot_model)"/>
+  </include>
+
+  <node pkg="sagittarius_object_color_detector" type="sgr_ctrl.py" name="sgr_ctrl_node" output="screen" ns="$(arg robot_name)">
+    <param name="max_velocity_scaling" value="$(arg motion_velocity_scaling)"/>
+    <param name="max_acceleration_scaling" value="$(arg motion_acceleration_scaling)"/>
+    <param name="execute_wait" value="$(arg motion_execute_wait)"/>
+  </node>
+
+  <include file="$(find sagittarius_object_color_detector)/launch/usb_cam.launch">
+    <arg name="video_dev" value="$(arg video_dev)"/>
+  </include>
+
+  <rosparam command="load" file="$(arg agent_config)" ns="vlm_agent_executor"/>
+
+  <node pkg="sagittarius_vlm_agent" type="vlm_agent_executor.py" name="vlm_agent_executor" output="screen">
+    <param name="robot_name" value="$(arg robot_name)"/>
+    <param name="arm_name" value="$(arg robot_name)"/>
+    <param name="prompt" value="$(arg prompt)"/>
+    <param name="model" value="$(arg model)"/>
+    <param name="api_base" value="$(arg api_base)"/>
+    <param name="openai_api_key" value="$(arg openai_api_key)"/>
+    <param name="vision_config" value="$(arg vision_config)"/>
+  </node>
+</launch>

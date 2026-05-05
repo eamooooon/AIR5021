@@ -1,0 +1,126 @@
+[
+  {
+    "success": true,
+    "otsu_threshold": 73.0,
+    "used_threshold": 53,
+    "proposals": [
+      {
+        "bbox": [
+          175,
+          209,
+          338,
+          371
+        ],
+        "grasp_pixel": [
+          257,
+          290
+        ],
+        "area": 21898.5,
+        "bbox_area": 26406.0,
+        "fill_ratio": 0.8293001590547603,
+        "aspect": 1.0061728395061729,
+        "mean_bgr": [
+          90.75727936536555,
+          147.31533399441088,
+          92.97854502839628
+        ],
+        "score": 18160.42953306067,
+        "id": "obj_1"
+      }
+    ],
+    "image": "logs/vlm_agent/20260504_171420/step_001_raw.jpg"
+  },
+  {
+    "success": true,
+    "otsu_threshold": 74.0,
+    "used_threshold": 53,
+    "proposals": [
+      {
+        "bbox": [
+          197,
+          94,
+          349,
+          261
+        ],
+        "grasp_pixel": [
+          272,
+          178
+        ],
+        "area": 23208.0,
+        "bbox_area": 25384.0,
+        "fill_ratio": 0.9142767097384179,
+        "aspect": 0.9101796407185628,
+        "mean_bgr": [
+          86.47621074133968,
+          143.80351519278236,
+          91.88198995659205
+        ],
+        "score": 21218.533879609204,
+        "id": "obj_1"
+      }
+    ],
+    "image": "logs/vlm_agent/20260504_173939/step_001_raw.jpg"
+  },
+  {
+    "success": true,
+    "otsu_threshold": 78.0,
+    "used_threshold": 56,
+    "proposals": [
+      {
+        "bbox": [
+          357,
+          352,
+          553,
+          480
+        ],
+        "grasp_pixel": [
+          453,
+          421
+        ],
+        "area": 19562.5,
+        "bbox_area": 25088.0,
+        "fill_ratio": 0.7797552614795918,
+        "aspect": 1.53125,
+        "mean_bgr": [
+          87.26097917612061,
+          142.41955326980286,
+          93.88282156002622
+        ],
+        "score": 15253.962302694516,
+        "id": "obj_1"
+      }
+    ],
+    "image": "logs/vlm_agent/20260504_174140/step_001_raw.jpg"
+  },
+  {
+    "success": true,
+    "otsu_threshold": 78.0,
+    "used_threshold": 56,
+    "proposals": [
+      {
+        "bbox": [
+          359,
+          352,
+          554,
+          480
+        ],
+        "grasp_pixel": [
+          455,
+          421
+        ],
+        "area": 19544.5,
+        "bbox_area": 24960.0,
+        "fill_ratio": 0.7830328525641026,
+        "aspect": 1.5234375,
+        "mean_bgr": [
+          85.38107494322483,
+          140.858642442594,
+          89.64577340398688
+        ],
+        "score": 15303.985586939103,
+        "id": "obj_1"
+      }
+    ],
+    "image": "logs/vlm_agent/20260504_174223/step_001_raw.jpg"
+  }
+]

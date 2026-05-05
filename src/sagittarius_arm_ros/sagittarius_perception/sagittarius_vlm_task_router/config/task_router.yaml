@@ -1,0 +1,50 @@
+task_router:
+  model: "gpt-5.4"
+  api_base: "https://api.openai.com/v1"
+  request_timeout: 20.0
+  use_llm_routing: true
+  supported_tasks:
+    - clean_desk
+    - wave_hand
+    - nod
+    - draw_circle
+    - spin_wrist
+
+motion_task:
+  default_roll: 0.0
+  default_pitch: 1.57
+  default_yaw: 0.0
+  home_x: 0.20
+  home_y: 0.00
+  home_z: 0.15
+  wave_x: 0.20
+  wave_y: 0.00
+  wave_z: 0.15
+  wave_yaw_span_rad: 0.45
+  nod_x: 0.20
+  nod_y: 0.00
+  nod_z: 0.15
+  nod_pitch_span_rad: 0.12
+  nod_z_span_m: 0.014
+  nod_x_span_m: 0.020
+  circle_center_x: 0.20
+  circle_center_y: 0.00
+  circle_center_z: 0.15
+  arm_rotate_center_x: 0.12
+  arm_rotate_center_y: 0.00
+  arm_rotate_z: 0.15
+  arm_rotate_pitch: 1.57
+  arm_rotate_radius_m: 0.10
+  arm_rotate_angle_span_rad: 0.95
+  default_circle_radius: 0.04
+  default_circle_points: 24
+  circle_eef_step: 0.008
+  circle_velocity_scaling: 0.8
+  circle_acceleration_scaling: 0.8
+  cartesian_max_attempts: 6
+  default_repetitions: 1
+  default_transition_points: 5
+  waypoint_pause_sec: 0.0
+  action_wait_timeout: 30.0
+  save_results: true
+  results_dir: "/home/robotics/Team1/results"

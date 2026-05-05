@@ -1,0 +1,14 @@
+arrives/
+bugs/
+build/
+devel/
+logs/
+manipulate-anything/
+results/
+
+.catkin_workspace
+auth.json
+.codex
+*.pyc
+__pycache__/
+.pytest_cache/
