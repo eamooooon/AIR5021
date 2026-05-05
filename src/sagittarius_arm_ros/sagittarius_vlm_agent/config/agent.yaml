@@ -1,7 +1,7 @@
 agent:
-  model: "mimo-v2.5-pro"
-  api_base: "https://token-plan-cn.xiaomimimo.com/v1"
-  openai_api_key: "tp-ctglrprs1ak3ah1jj4ar61fns9cx64kz22yl00s0xvxp0sbk"
+  model: "gpt-5.5"
+  api_base: "https://api.aibold.art/v1"
+  openai_api_key: "your-api-key-3"
   request_timeout: 30.0
   max_steps: 10
   execution_mode: "auto"
