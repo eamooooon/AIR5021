@@ -113,6 +113,16 @@ class VlmAgentExecutor:
             "grasp_payload_threshold": get_robot_param("grasp_payload_threshold", 24),
             "place_slots": get_robot_param("place_slots", [[0.0, 0.2]]),
             "hand_eye_config": self.hand_eye_config,
+            "recenter_enabled": get_robot_param("recenter_enabled", True),
+            "recenter_margin_px": get_robot_param("recenter_margin_px", 18),
+            "recenter_max_attempts": get_robot_param("recenter_max_attempts", 2),
+            "recenter_camera_moves_with_arm": get_robot_param("recenter_camera_moves_with_arm", True),
+            "recenter_max_step_xy": get_robot_param("recenter_max_step_xy", 0.06),
+            "recenter_min_step_xy": get_robot_param("recenter_min_step_xy", 0.004),
+            "recenter_min_x": get_robot_param("recenter_min_x", -0.05),
+            "recenter_max_x": get_robot_param("recenter_max_x", 0.28),
+            "recenter_min_y": get_robot_param("recenter_min_y", -0.22),
+            "recenter_max_y": get_robot_param("recenter_max_y", 0.22),
         }
         self.memory = AgentMemory(self.prompt, self.results_dir, self.save_results)
 
@@ -252,6 +262,12 @@ class VlmAgentExecutor:
             "Select the object requested by the user from local proposals.",
         )
         object_id = obj_result["object_id"]
+        visibility_result = self.execute_and_record(
+            "ensure_object_visible",
+            {"query": task["object_query"], "object_id": object_id},
+            "Recenter the view if the selected object is partially outside the image.",
+        )
+        object_id = visibility_result["object_id"]
 
         target_id = ""
         if task["type"] == "pick_and_place":

@@ -40,6 +40,9 @@ class RobotTools:
         self.observe_x = float(config["observe_x"])
         self.observe_y = float(config["observe_y"])
         self.observe_z = float(config["observe_z"])
+        self.current_observe_x = self.observe_x
+        self.current_observe_y = self.observe_y
+        self.current_observe_z = self.observe_z
         self.pick_z = float(config["pick_z"])
         self.pre_grasp_offset_z = float(config["pre_grasp_offset_z"])
         self.lift_offset_z = float(config["lift_offset_z"])
@@ -59,6 +62,16 @@ class RobotTools:
         self.max_gripper_width = float(config["max_gripper_width"])
         self.grasp_payload_threshold = int(config["grasp_payload_threshold"])
         self.place_slots = [tuple(slot) for slot in config["place_slots"]]
+        self.recenter_enabled = as_bool(config.get("recenter_enabled", True))
+        self.recenter_max_step_xy = float(config.get("recenter_max_step_xy", 0.06))
+        self.recenter_min_step_xy = float(config.get("recenter_min_step_xy", 0.004))
+        self.recenter_margin_px = int(config.get("recenter_margin_px", 18))
+        self.recenter_max_attempts = int(config.get("recenter_max_attempts", 2))
+        self.recenter_camera_moves_with_arm = as_bool(config.get("recenter_camera_moves_with_arm", True))
+        self.recenter_min_x = float(config.get("recenter_min_x", -0.05))
+        self.recenter_max_x = float(config.get("recenter_max_x", 0.28))
+        self.recenter_min_y = float(config.get("recenter_min_y", -0.22))
+        self.recenter_max_y = float(config.get("recenter_max_y", 0.22))
         self.k1, self.b1, self.k2, self.b2 = self.load_linear_regression(vision_config)
         self.hand_eye = self.load_hand_eye_calibration(config.get("hand_eye_config", ""))
 
@@ -115,8 +128,71 @@ class RobotTools:
 
     def pixel_to_robot_xy(self, pixel_x, pixel_y):
         if self.hand_eye is not None:
-            return self.hand_eye.pixel_to_robot_xy(pixel_x, pixel_y, plane_z=self.pick_z)
+            x, y = self.hand_eye.pixel_to_robot_xy(pixel_x, pixel_y, plane_z=self.pick_z)
+            if self.recenter_camera_moves_with_arm:
+                x += self.current_observe_x - self.observe_x
+                y += self.current_observe_y - self.observe_y
+            return x, y
         return self.k1 * pixel_y + self.b1, self.k2 * pixel_x + self.b2
+
+    def clamp_recenter_pose(self, x, y):
+        return (
+            max(self.recenter_min_x, min(float(x), self.recenter_max_x)),
+            max(self.recenter_min_y, min(float(y), self.recenter_max_y)),
+        )
+
+    def frame_center_robot_xy(self, frame_shape):
+        height, width = frame_shape[:2]
+        return self.pixel_to_robot_xy((float(width) - 1.0) * 0.5, (float(height) - 1.0) * 0.5)
+
+    def recenter_camera_on_object(self, obj, frame_shape):
+        if not self.recenter_enabled:
+            return {"success": False, "skipped": True, "reason": "recenter_disabled"}
+        if self.hand_eye is None:
+            return {"success": False, "skipped": True, "reason": "hand_eye_calibration_unavailable"}
+
+        object_x, object_y = [float(v) for v in obj["robot_xy"]]
+        center_x, center_y = self.frame_center_robot_xy(frame_shape)
+        delta_x = object_x - center_x
+        delta_y = object_y - center_y
+        distance = math.hypot(delta_x, delta_y)
+        if distance < self.recenter_min_step_xy:
+            return {
+                "success": False,
+                "skipped": True,
+                "reason": "recenter_delta_too_small",
+                "delta_xy": [delta_x, delta_y],
+                "distance": distance,
+            }
+
+        scale = 1.0
+        if distance > self.recenter_max_step_xy:
+            scale = self.recenter_max_step_xy / distance
+        step_x = delta_x * scale
+        step_y = delta_y * scale
+        start_x = self.current_observe_x
+        start_y = self.current_observe_y
+        target_x, target_y = self.clamp_recenter_pose(start_x + step_x, start_y + step_y)
+
+        self.send_pose_goal(
+            target_x,
+            target_y,
+            self.current_observe_z,
+            self.default_pick_roll,
+            self.default_pick_pitch,
+            self.default_pick_yaw,
+        )
+        self.current_observe_x = target_x
+        self.current_observe_y = target_y
+        return {
+            "success": True,
+            "pose": [target_x, target_y, self.current_observe_z],
+            "object_xy": [object_x, object_y],
+            "frame_center_xy": [center_x, center_y],
+            "delta_xy": [delta_x, delta_y],
+            "applied_step_xy": [target_x - start_x, target_y - start_y],
+            "limited": bool(scale < 1.0),
+        }
 
     def estimate_block_height(self, proposal):
         points = proposal.get("rotated_rect", {}).get("box_points", [])
@@ -214,6 +290,9 @@ class RobotTools:
             self.default_pick_pitch,
             self.default_pick_yaw,
         )
+        self.current_observe_x = self.observe_x
+        self.current_observe_y = self.observe_y
+        self.current_observe_z = self.observe_z
         return {"success": True, "pose": [self.observe_x, self.observe_y, self.observe_z]}
 
     def open_gripper(self):

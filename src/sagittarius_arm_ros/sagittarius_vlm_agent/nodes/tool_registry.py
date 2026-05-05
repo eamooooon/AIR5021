@@ -24,6 +24,11 @@ TOOL_SCHEMAS = [
         "parameters": {"query": "string"},
     },
     {
+        "name": "ensure_object_visible",
+        "description": "If the selected object is clipped by the image boundary, use hand-eye calibration to recenter the view, then capture, detect, and select again.",
+        "parameters": {"query": "string", "object_id": "string"},
+    },
+    {
         "name": "pick_object",
         "description": "Pick a previously detected object using its memory object_id.",
         "parameters": {"object_id": "string"},
@@ -86,6 +91,12 @@ class ToolRegistry:
             return self.vision_tools.detect_objects(arguments.get("query", ""), self.robot_tools)
         if tool == "select_object":
             return self.vision_tools.select_object(arguments.get("query", ""))
+        if tool == "ensure_object_visible":
+            return self.vision_tools.ensure_selected_object_visible(
+                arguments.get("query", ""),
+                arguments.get("object_id", ""),
+                self.robot_tools,
+            )
         if tool == "pick_object":
             return self.robot_tools.pick_object(arguments.get("object_id", ""))
         if tool == "place_object":

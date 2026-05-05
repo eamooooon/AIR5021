@@ -102,13 +102,15 @@ class VisionTools:
     def detect_object(self, query, robot_tools):
         detect_result = self.detect_objects(query, robot_tools)
         select_result = self.select_object(query)
-        object_id = select_result["object_id"]
+        visibility_result = self.ensure_selected_object_visible(query, select_result["object_id"], robot_tools)
+        object_id = visibility_result["object_id"]
         return {
             "success": True,
             "object_id": object_id,
             "object": self.memory.objects[object_id],
             "objects": detect_result["objects"],
             "selection": select_result,
+            "visibility": visibility_result,
         }
 
     def detect_objects(self, query, robot_tools):
@@ -150,6 +152,74 @@ class VisionTools:
             "proposal_count": len(detected),
             "annotated_image_path": annotated_path,
             "summary": "Generated %d local block proposals for query: %s" % (len(detected), query),
+        }
+
+    def object_needs_recenter(self, obj, frame_shape, margin_px):
+        height, width = frame_shape[:2]
+        bbox = obj.get("bbox", [0, 0, 0, 0])
+        if len(bbox) != 4:
+            return False, []
+        x_min, y_min, x_max, y_max = [int(v) for v in bbox]
+        reasons = []
+        proposal = obj.get("proposal", {})
+        if bool(proposal.get("touches_border", False)):
+            reasons.append("touches_border")
+        if x_min <= margin_px:
+            reasons.append("left_margin")
+        if y_min <= margin_px:
+            reasons.append("top_margin")
+        if x_max >= width - 1 - margin_px:
+            reasons.append("right_margin")
+        if y_max >= height - 1 - margin_px:
+            reasons.append("bottom_margin")
+        return bool(reasons), reasons
+
+    def ensure_selected_object_visible(self, query, object_id, robot_tools):
+        attempts = []
+        current_id = object_id
+        max_attempts = max(0, int(getattr(robot_tools, "recenter_max_attempts", 0)))
+        margin_px = int(getattr(robot_tools, "recenter_margin_px", 18))
+
+        for attempt_index in range(max_attempts):
+            frame = self.require_frame()
+            obj = self.memory.get_object(current_id)
+            needs_recenter, reasons = self.object_needs_recenter(obj, frame.shape, margin_px)
+            if not needs_recenter:
+                return {
+                    "success": True,
+                    "object_id": current_id,
+                    "recentered": bool(attempts),
+                    "attempts": attempts,
+                    "complete": True,
+                }
+
+            move_result = robot_tools.recenter_camera_on_object(obj, frame.shape)
+            attempts.append({
+                "attempt": attempt_index + 1,
+                "object_id": current_id,
+                "reasons": reasons,
+                "move": move_result,
+            })
+            self.memory.append_log("INFO", "Recentered view for partial object", attempts[-1])
+            if not move_result.get("success"):
+                break
+
+            rospy.sleep(0.5)
+            self.capture_image()
+            self.detect_objects(query, robot_tools)
+            select_result = self.select_object(query)
+            current_id = select_result["object_id"]
+
+        frame = self.require_frame()
+        obj = self.memory.get_object(current_id)
+        needs_recenter, reasons = self.object_needs_recenter(obj, frame.shape, margin_px)
+        return {
+            "success": True,
+            "object_id": current_id,
+            "recentered": bool(attempts),
+            "attempts": attempts,
+            "complete": not needs_recenter,
+            "remaining_reasons": reasons,
         }
 
     def query_color(self, query):
