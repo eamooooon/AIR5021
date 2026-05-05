@@ -11,6 +11,7 @@ from actionlib_msgs.msg import GoalStatus
 
 from sagittarius_object_color_detector.msg import SGRCtrlAction, SGRCtrlGoal
 from sdk_sagittarius_arm.srv import ServoRtInfo, ServoRtInfoRequest
+from hand_eye_calibration import HandEyeCalibration
 
 
 class RobotTools:
@@ -41,6 +42,7 @@ class RobotTools:
         self.grasp_payload_threshold = int(config["grasp_payload_threshold"])
         self.place_slots = [tuple(slot) for slot in config["place_slots"]]
         self.k1, self.b1, self.k2, self.b2 = self.load_linear_regression(vision_config)
+        self.hand_eye = self.load_hand_eye_calibration(config.get("hand_eye_config", ""))
 
         self.arm_client = actionlib.SimpleActionClient(self.arm_name + "/sgr_ctrl", SGRCtrlAction)
         rospy.loginfo("Waiting for action server: %s/sgr_ctrl", self.arm_name)
@@ -69,6 +71,18 @@ class RobotTools:
         linear = content["LinearRegression"]
         return linear["k1"], linear["b1"], linear["k2"], linear["b2"]
 
+    def load_hand_eye_calibration(self, path):
+        if not path:
+            rospy.logwarn("No hand-eye calibration configured; using legacy pixel linear regression")
+            return None
+        try:
+            calibration = HandEyeCalibration.from_yaml(path)
+        except Exception as exc:
+            rospy.logwarn("Failed to load hand-eye calibration %s: %s; using legacy pixel linear regression", path, exc)
+            return None
+        rospy.loginfo("Loaded hand-eye calibration from %s", path)
+        return calibration
+
     def resolve_robot_resource(self, resource_name):
         if resource_name.startswith("/"):
             return resource_name
@@ -82,6 +96,8 @@ class RobotTools:
         return rospy.resolve_name(self.robot_name)
 
     def pixel_to_robot_xy(self, pixel_x, pixel_y):
+        if self.hand_eye is not None:
+            return self.hand_eye.pixel_to_robot_xy(pixel_x, pixel_y, plane_z=self.pick_z)
         return self.k1 * pixel_y + self.b1, self.k2 * pixel_x + self.b2
 
     def clip_gripper_width(self, width):

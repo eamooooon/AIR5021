@@ -1,0 +1,26 @@
+<launch>
+  <arg name="video_dev" default="/dev/usb_cam"/>
+  <arg name="image_topic" default="/usb_cam/image_raw"/>
+  <arg name="output_path" default="$(find sagittarius_vlm_agent)/config/camera_intrinsics.yaml"/>
+
+  <!-- 5x6 方块棋盘格对应 4x5 个内角点；square_size 单位是米。 -->
+  <arg name="inner_cols" default="4"/>
+  <arg name="inner_rows" default="5"/>
+  <arg name="square_size" default="0.020"/>
+  <arg name="min_samples" default="12"/>
+  <arg name="preview" default="true"/>
+
+  <include file="$(find sagittarius_object_color_detector)/launch/usb_cam.launch">
+    <arg name="video_dev" value="$(arg video_dev)"/>
+  </include>
+
+  <node pkg="sagittarius_vlm_agent" type="camera_intrinsics_calibration.py" name="camera_intrinsics_calibration" output="screen">
+    <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="output_path" value="$(arg output_path)"/>
+    <param name="inner_cols" value="$(arg inner_cols)"/>
+    <param name="inner_rows" value="$(arg inner_rows)"/>
+    <param name="square_size" value="$(arg square_size)"/>
+    <param name="min_samples" value="$(arg min_samples)"/>
+    <param name="preview" value="$(arg preview)"/>
+  </node>
+</launch>
