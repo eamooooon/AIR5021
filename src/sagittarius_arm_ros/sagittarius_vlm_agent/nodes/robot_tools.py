@@ -214,6 +214,17 @@ class RobotTools:
         return {"success": True, "holding": success, "payload": result.payload}
 
     def pick_object(self, object_id):
+        if self.memory.held_object_id:
+            if self.memory.held_object_id == object_id:
+                return {
+                    "success": True,
+                    "object_id": object_id,
+                    "already_holding": True,
+                    "message": "Object is already marked as held; skipping duplicate pick.",
+                }
+            raise RuntimeError(
+                "Cannot pick %s while already holding %s" % (object_id, self.memory.held_object_id)
+            )
         obj = self.memory.get_object(object_id)
         grasp_x, grasp_y = obj["robot_xy"]
         yaw, yaw_info = self.resolve_pick_yaw(obj)

@@ -37,7 +37,7 @@ def foreground_score(image):
 def build_foreground_mask(image):
     score = foreground_score(image)
     threshold, _ = cv2.threshold(score, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    floor = max(22, int(round(threshold * 0.72)))
+    floor = max(22, int(round(threshold * 0.85)))
     _, mask = cv2.threshold(score, floor, 255, cv2.THRESH_BINARY)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)

@@ -34,7 +34,7 @@ robot:
   default_block_height: 0.03
   min_estimated_block_height: 0.015
   max_estimated_block_height: 0.03
-  place_on_target_clearance: 0.0
+  place_on_target_clearance: -0.02
   stack_pre_place_offset_z: 0.03
   max_place_approach_z: 0.12
   place_roll: 0.0

@@ -172,6 +172,17 @@ class VlmAgentExecutor:
 
     def parse_template_task(self):
         prompt = self.prompt.strip().lower()
+        chinese_place_match = re.search(
+            r"(?:把|将)\s*(.+?)\s*(?:放在|放到|放置到|放置在|放上|放至)\s*(.+?)(?:上面|上|顶部)?$",
+            prompt,
+        )
+        if chinese_place_match:
+            return {
+                "type": "pick_and_place",
+                "object_query": chinese_place_match.group(1).strip(),
+                "target_query": chinese_place_match.group(2).strip(),
+            }
+
         place_match = re.search(
             r"(?:pick up|pick|grab)\s+(?:the\s+)?(.+?)\s+(?:and\s+)?(?:place|put)\s+(?:it\s+)?(?:on|onto|near|at)\s+(?:the\s+)?(.+)",
             prompt,

@@ -152,13 +152,93 @@ class VisionTools:
             "summary": "Generated %d local block proposals for query: %s" % (len(detected), query),
         }
 
+    def query_color(self, query):
+        text = str(query or "").lower()
+        if "红" in text or "red" in text:
+            return "red"
+        if "绿" in text or "green" in text:
+            return "green"
+        if "蓝" in text or "blue" in text:
+            return "blue"
+        return ""
+
+    def color_score(self, mean_bgr, color):
+        b, g, r = [float(v) for v in mean_bgr]
+        if color == "red":
+            return r - max(g, b)
+        if color == "green":
+            return g - max(r, b)
+        if color == "blue":
+            return b - max(r, g)
+        return 0.0
+
+    def is_darker_query(self, query):
+        text = str(query or "").lower()
+        return any(term in text for term in ("更深", "深色", "深红", "darker", "dark"))
+
+    def local_color_select(self, query):
+        color = self.query_color(query)
+        if not color:
+            return None
+
+        candidates = []
+        for proposal in self.latest_proposals:
+            object_id = proposal.get("id", "")
+            stored = self.memory.objects.get(object_id, {})
+            mean_bgr = stored.get("mean_bgr") or proposal.get("mean_bgr")
+            if not object_id or object_id not in self.memory.objects or not mean_bgr:
+                continue
+            b, g, r = [float(v) for v in mean_bgr]
+            score = self.color_score(mean_bgr, color)
+            brightness = (b + g + r) / 3.0
+            candidates.append({
+                "object_id": object_id,
+                "score": score,
+                "brightness": brightness,
+                "mean_bgr": [b, g, r],
+            })
+
+        if not candidates:
+            return None
+
+        positive = [item for item in candidates if item["score"] > 8.0]
+        pool = positive or candidates
+        if self.is_darker_query(query):
+            chosen = sorted(pool, key=lambda item: (item["brightness"], -item["score"]))[0]
+        else:
+            chosen = sorted(pool, key=lambda item: (-item["score"], item["brightness"]))[0]
+
+        confidence = 0.9 if chosen["score"] > 8.0 else 0.55
+        return {
+            "object_id": chosen["object_id"],
+            "confidence": confidence,
+            "rationale": (
+                "Local color selector matched %s query '%s' to %s "
+                "(mean_bgr=%s, score=%.2f, brightness=%.2f)."
+            ) % (
+                color,
+                query,
+                chosen["object_id"],
+                [round(v, 2) for v in chosen["mean_bgr"]],
+                chosen["score"],
+                chosen["brightness"],
+            ),
+        }
+
     def select_object(self, query):
         frame = self.require_frame()
         if not self.latest_proposals:
             raise RuntimeError("No proposals available. Call detect_objects first.")
         annotated = annotate_proposals(frame, self.latest_proposals)
-        result = self.selector.select(query, self.latest_proposals, annotated)
+        local_result = self.local_color_select(query)
+        if local_result is not None:
+            result = local_result
+        else:
+            result = self.selector.select(query, self.latest_proposals, annotated)
         object_id = result.get("object_id", "")
+        if object_id not in self.memory.objects and local_result is not None:
+            result = local_result
+            object_id = result.get("object_id", "")
         if object_id not in self.memory.objects:
             raise RuntimeError("Selector returned invalid object_id=%s" % object_id)
         confidence = float(result.get("confidence", 0.0))
