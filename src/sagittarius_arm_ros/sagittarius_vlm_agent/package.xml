@@ -32,6 +32,9 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>moveit_commander</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>sagittarius_moveit</exec_depend>
   <exec_depend>sdk_sagittarius_arm</exec_depend>

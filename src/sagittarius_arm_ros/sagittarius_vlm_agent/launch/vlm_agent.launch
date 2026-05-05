@@ -7,6 +7,7 @@
   <arg name="api_base" default=""/>
   <arg name="openai_api_key" default=""/>
   <arg name="vision_config" default="$(find sagittarius_vlm_agent)/config/vision_config.yaml"/>
+  <arg name="hand_eye_config" default="$(find sagittarius_vlm_agent)/config/hand_eye_calibration.yaml"/>
   <arg name="agent_config" default="$(find sagittarius_vlm_agent)/config/agent.yaml"/>
   <arg name="ros_log_dir" default="/home/robotics/Team1/logs/ros"/>
   <arg name="motion_velocity_scaling" default="0.8"/>
@@ -41,5 +42,6 @@
     <param name="api_base" value="$(arg api_base)"/>
     <param name="openai_api_key" value="$(arg openai_api_key)"/>
     <param name="vision_config" value="$(arg vision_config)"/>
+    <param name="hand_eye_config" value="$(arg hand_eye_config)"/>
   </node>
 </launch>

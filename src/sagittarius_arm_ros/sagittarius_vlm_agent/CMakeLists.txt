@@ -40,6 +40,9 @@ catkin_install_python(
   PROGRAMS
     nodes/vlm_agent_executor.py
     nodes/sgr_ctrl.py
+    nodes/camera_intrinsics_calibration.py
+    nodes/hand_eye_calibration_tool.py
+    nodes/test_hand_eye_calibration.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

@@ -74,6 +74,7 @@ class VlmAgentExecutor:
         self.min_confidence = float(get_agent_param("min_confidence", 0.35))
         self.debug_image = bool(get_agent_param("debug_image", True))
         self.vision_config = get_param("vision_config", "")
+        self.hand_eye_config = get_param("hand_eye_config", "")
         self.enable_motion_tools = bool(get_agent_param("enable_motion_tools", False))
 
         self.robot_config = {
@@ -111,6 +112,7 @@ class VlmAgentExecutor:
             "max_gripper_width": get_robot_param("max_gripper_width", 0.0),
             "grasp_payload_threshold": get_robot_param("grasp_payload_threshold", 24),
             "place_slots": get_robot_param("place_slots", [[0.0, 0.2]]),
+            "hand_eye_config": self.hand_eye_config,
         }
         self.memory = AgentMemory(self.prompt, self.results_dir, self.save_results)
 
