@@ -2,7 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROMPT="${*:-pick up the green block}"
+PROMPT_FILE="${ROOT_DIR}/prompt.txt"
+
+if [[ "$#" -gt 0 ]]; then
+  PROMPT="$*"
+elif [[ -f "$PROMPT_FILE" ]]; then
+  PROMPT="$(tr '\n' ' ' < "$PROMPT_FILE" | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+else
+  PROMPT="pick up the green block"
+fi
 
 cd "$ROOT_DIR"
 
