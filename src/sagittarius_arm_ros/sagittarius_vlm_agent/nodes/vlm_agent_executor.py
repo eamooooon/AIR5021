@@ -203,19 +203,24 @@ class VlmAgentExecutor:
         rospy.loginfo("Using template execution: %s", task)
         self.memory.append_log("INFO", "Using template execution", task)
         self.execute_and_record("capture_image", {}, "Capture an image before visual detection.")
+        self.execute_and_record(
+            "detect_objects",
+            {"query": self.prompt},
+            "Generate local block proposals before selecting the requested object.",
+        )
         obj_result = self.execute_and_record(
-            "detect_object",
+            "select_object",
             {"query": task["object_query"]},
-            "Detect the object requested by the user.",
+            "Select the object requested by the user from local proposals.",
         )
         object_id = obj_result["object_id"]
 
         target_id = ""
         if task["type"] == "pick_and_place":
             target_result = self.execute_and_record(
-                "detect_object",
+                "select_object",
                 {"query": task["target_query"]},
-                "Detect the placement target requested by the user.",
+                "Select the placement target requested by the user from local proposals.",
             )
             target_id = target_result["object_id"]
 

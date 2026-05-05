@@ -10,6 +10,8 @@ import rospy
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
 
+from block_proposer import annotate_proposals, propose_blocks
+from object_selector import ObjectSelector
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SAGITTARIUS_ARM_ROS_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -19,9 +21,6 @@ CLEANER_NODES = os.path.join(PERCEPTION_DIR, "sagittarius_vlm_cleaner", "nodes")
 for path in (OBJECT_NODES, CLEANER_NODES):
     if path not in sys.path:
         sys.path.insert(0, path)
-
-from vlm_grasp_planner import OpenAIVlmPlanner
-from clean_desk_planner import OpenAICleanDeskPlanner
 
 
 class VisionTools:
@@ -34,8 +33,9 @@ class VisionTools:
         self.image_topic = image_topic
         self.min_confidence = min_confidence
         self.debug_image = debug_image
-        self.single_planner = OpenAIVlmPlanner(api_base, api_key, model, timeout, rospy_module=rospy)
-        self.multi_planner = OpenAICleanDeskPlanner(api_base, api_key, model, timeout, rospy_module=rospy)
+        self.selector = ObjectSelector(api_base, api_key, model, timeout, rospy_module=rospy)
+        self.latest_proposals = []
+        self.latest_proposal_image = None
         self.image_sub = rospy.Subscriber(self.image_topic, Image, self.image_callback, queue_size=1)
 
     def image_callback(self, msg):
@@ -95,17 +95,12 @@ class VisionTools:
             raise RuntimeError("Invalid bbox after clipping")
         return [x_min, y_min, x_max, y_max], [gx, gy]
 
-    def annotate_object(self, frame, label, bbox, grasp_pixel, confidence, suffix):
+    def save_or_show_proposals(self, frame, proposals, suffix="proposals", selected_id=""):
         if not self.debug_image and not self.memory.save_results:
             return ""
-        vis = frame.copy()
-        x_min, y_min, x_max, y_max = bbox
-        gx, gy = grasp_pixel
-        cv2.rectangle(vis, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-        cv2.circle(vis, (gx, gy), 4, (0, 0, 255), -1)
-        cv2.putText(vis, "%s %.2f" % (label, confidence), (x_min, max(24, y_min - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        vis = annotate_proposals(frame, proposals, selected_id=selected_id)
         if self.debug_image:
-            cv2.imshow("vlm_agent_detection", vis)
+            cv2.imshow("vlm_agent_proposals", vis)
             cv2.waitKey(1)
         if self.memory.save_results:
             path = os.path.join(self.memory.get_results_dir(), "step_%03d_%s.jpg" % (self.memory.step, suffix))
@@ -115,56 +110,75 @@ class VisionTools:
         return ""
 
     def detect_object(self, query, robot_tools):
-        frame = self.require_frame()
-        plan = self.single_planner.plan(frame, query, cv2)
-        if plan.confidence < self.min_confidence:
-            raise RuntimeError("VLM confidence too low for %s: %.3f" % (query, plan.confidence))
-        bbox, grasp_pixel = self.normalize_bbox_and_grasp(plan.bbox, plan.grasp_pixel, frame.shape)
-        robot_xy = robot_tools.pixel_to_robot_xy(grasp_pixel[0], grasp_pixel[1])
-        object_id = self.memory.add_object(
-            label=plan.target or query,
-            bbox=bbox,
-            grasp_pixel=grasp_pixel,
-            robot_xy=list(robot_xy),
-            confidence=plan.confidence,
-            gripper_width=min(max(plan.gripper_width, 0.0), 0.03),
-            yaw_deg=plan.yaw_deg,
-            rationale=plan.rationale,
-        )
-        annotated_path = self.annotate_object(frame, plan.target or query, bbox, grasp_pixel, plan.confidence, object_id)
+        detect_result = self.detect_objects(query, robot_tools)
+        select_result = self.select_object(query)
+        object_id = select_result["object_id"]
         return {
             "success": True,
             "object_id": object_id,
             "object": self.memory.objects[object_id],
-            "annotated_image_path": annotated_path,
+            "objects": detect_result["objects"],
+            "selection": select_result,
         }
 
     def detect_objects(self, query, robot_tools):
         frame = self.require_frame()
-        plan = self.multi_planner.plan(frame, query, cv2)
+        proposal_result = propose_blocks(frame)
+        proposals = proposal_result["proposals"]
+        if not proposals:
+            raise RuntimeError("No local block proposals found")
         detected = []
-        for obj in plan.objects:
-            if obj.confidence < self.min_confidence:
-                continue
-            try:
-                bbox, grasp_pixel = self.normalize_bbox_and_grasp(obj.bbox, obj.grasp_pixel, frame.shape)
-            except RuntimeError as exc:
-                rospy.logwarn("Skipping invalid object %s: %s", obj.label, exc)
-                continue
+        for proposal in proposals:
+            bbox, grasp_pixel = self.normalize_bbox_and_grasp(proposal["bbox"], proposal["grasp_pixel"], frame.shape)
             robot_xy = robot_tools.pixel_to_robot_xy(grasp_pixel[0], grasp_pixel[1])
             object_id = self.memory.add_object(
-                label=obj.label,
+                label=proposal["id"],
                 bbox=bbox,
                 grasp_pixel=grasp_pixel,
                 robot_xy=list(robot_xy),
-                confidence=obj.confidence,
-                gripper_width=min(max(obj.gripper_width, 0.0), 0.03),
-                yaw_deg=obj.yaw_deg,
-                rationale=obj.rationale,
+                confidence=1.0,
+                gripper_width=0.02,
+                yaw_deg=proposal["yaw_deg"] if proposal["yaw_reliable"] else 0.0,
+                rationale="Local block proposal generated from foreground segmentation.",
+                object_id=proposal["id"],
+                extra={
+                    "proposal": proposal,
+                    "yaw_reliable": proposal["yaw_reliable"],
+                    "yaw_confidence": proposal["yaw_confidence"],
+                    "mean_bgr": proposal["mean_bgr"],
+                },
             )
             detected.append(self.memory.objects[object_id])
+        self.latest_proposals = proposals
+        self.latest_proposal_image = annotate_proposals(frame, proposals)
+        annotated_path = self.save_or_show_proposals(frame, proposals, suffix="proposals")
         return {
             "success": True,
             "objects": detected,
-            "summary": plan.summary,
+            "proposal_count": len(detected),
+            "annotated_image_path": annotated_path,
+            "summary": "Generated %d local block proposals for query: %s" % (len(detected), query),
+        }
+
+    def select_object(self, query):
+        frame = self.require_frame()
+        if not self.latest_proposals:
+            raise RuntimeError("No proposals available. Call detect_objects first.")
+        annotated = annotate_proposals(frame, self.latest_proposals)
+        result = self.selector.select(query, self.latest_proposals, annotated)
+        object_id = result.get("object_id", "")
+        if object_id not in self.memory.objects:
+            raise RuntimeError("Selector returned invalid object_id=%s" % object_id)
+        confidence = float(result.get("confidence", 0.0))
+        selected = self.memory.objects[object_id]
+        selected["selection_confidence"] = confidence
+        selected["selection_rationale"] = result.get("rationale", "")
+        selected_path = self.save_or_show_proposals(frame, self.latest_proposals, suffix="selected_%s" % object_id, selected_id=object_id)
+        return {
+            "success": True,
+            "object_id": object_id,
+            "confidence": confidence,
+            "rationale": result.get("rationale", ""),
+            "object": selected,
+            "annotated_image_path": selected_path,
         }

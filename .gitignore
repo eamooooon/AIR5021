@@ -5,6 +5,8 @@ devel/
 logs/
 manipulate-anything/
 results/
+test/output
+test/output_*
 
 .catkin_workspace
 auth.json

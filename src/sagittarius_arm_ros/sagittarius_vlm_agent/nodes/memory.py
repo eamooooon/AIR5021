@@ -46,8 +46,9 @@ class AgentMemory:
             object_id = "%s_%d" % (base, index)
         return object_id
 
-    def add_object(self, label, bbox, grasp_pixel, robot_xy, confidence, gripper_width=0.02, yaw_deg=0.0, rationale=""):
-        object_id = self.make_object_id(label)
+    def add_object(self, label, bbox, grasp_pixel, robot_xy, confidence, gripper_width=0.02, yaw_deg=0.0, rationale="", object_id=None, extra=None):
+        if object_id is None:
+            object_id = self.make_object_id(label)
         self.objects[object_id] = {
             "id": object_id,
             "label": label,
@@ -59,6 +60,8 @@ class AgentMemory:
             "yaw_deg": yaw_deg,
             "rationale": rationale,
         }
+        if extra:
+            self.objects[object_id].update(extra)
         return object_id
 
     def get_object(self, object_id):

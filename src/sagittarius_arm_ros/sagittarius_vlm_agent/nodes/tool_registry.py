@@ -10,12 +10,17 @@ TOOL_SCHEMAS = [
     },
     {
         "name": "detect_object",
-        "description": "Detect one object in the current image and store it in memory.",
+        "description": "Compatibility helper: generate local block proposals, select one object by query, and store it in memory.",
         "parameters": {"query": "string"},
     },
     {
         "name": "detect_objects",
-        "description": "Detect multiple objects in the current image and store them in memory.",
+        "description": "Generate local color-independent block proposals in the current image and store them as obj_1, obj_2, ... in memory.",
+        "parameters": {"query": "string"},
+    },
+    {
+        "name": "select_object",
+        "description": "Select one object_id from existing local proposals using the user's query. The VLM must return only an existing proposal ID.",
         "parameters": {"query": "string"},
     },
     {
@@ -79,6 +84,8 @@ class ToolRegistry:
             return self.vision_tools.detect_object(arguments.get("query", ""), self.robot_tools)
         if tool == "detect_objects":
             return self.vision_tools.detect_objects(arguments.get("query", ""), self.robot_tools)
+        if tool == "select_object":
+            return self.vision_tools.select_object(arguments.get("query", ""))
         if tool == "pick_object":
             return self.robot_tools.pick_object(arguments.get("object_id", ""))
         if tool == "place_object":
