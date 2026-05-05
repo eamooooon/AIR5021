@@ -45,6 +45,36 @@ def build_foreground_mask(image):
     return mask, score, threshold, floor
 
 
+def clean_color_mask(mask):
+    open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, open_kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel)
+    return mask
+
+
+def build_color_masks(image, foreground_mask):
+    bgr = image.astype(np.int16)
+    b = bgr[:, :, 0]
+    g = bgr[:, :, 1]
+    r = bgr[:, :, 2]
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    h = hsv[:, :, 0]
+    s = hsv[:, :, 1]
+    v = hsv[:, :, 2]
+    foreground = foreground_mask > 0
+
+    red = foreground & (s > 35) & (v > 35) & ((h <= 12) | (h >= 165)) & (r > g + 10) & (r > b + 10)
+    green = foreground & (s > 25) & (v > 35) & (h >= 35) & (h <= 95) & (g > r + 6) & (g > b + 6)
+    blue = foreground & (s > 35) & (v > 35) & (h >= 95) & (h <= 135) & (b > g + 8) & (b > r + 8)
+
+    return [
+        ("red", clean_color_mask(red.astype(np.uint8) * 255)),
+        ("green", clean_color_mask(green.astype(np.uint8) * 255)),
+        ("blue", clean_color_mask(blue.astype(np.uint8) * 255)),
+    ]
+
+
 def contour_center(contour, bbox):
     moments = cv2.moments(contour)
     x_min, y_min, x_max, y_max = bbox
@@ -91,51 +121,101 @@ def mean_bgr(image, mask, bbox):
     return [float(mean[0]), float(mean[1]), float(mean[2])]
 
 
-def propose_blocks(image, min_area=500.0, max_area_ratio=0.55):
-    mask, score, otsu_threshold, used_threshold = build_foreground_mask(image)
+def contour_to_proposal(image, mask, contour, color_name):
+    area = float(cv2.contourArea(contour))
+    x, y, w, h = cv2.boundingRect(contour)
+    bbox = [int(x), int(y), int(x + w), int(y + h)]
+    bbox_area = float(w * h)
+    fill_ratio = area / bbox_area
+    aspect = float(w) / float(h)
+    rotated_rect = rotated_rect_from_contour(contour)
+    touches_border = x <= 1 or y <= 1 or x + w >= image.shape[1] - 1 or y + h >= image.shape[0] - 1
+    yaw_confidence = rotated_rect["rectangularity"]
+    return {
+        "bbox": bbox,
+        "grasp_pixel": contour_center(contour, bbox),
+        "rotated_rect": rotated_rect,
+        "yaw_deg": rotated_rect["angle_deg"],
+        "yaw_reliable": bool((not touches_border) and yaw_confidence >= 0.08),
+        "yaw_confidence": float(yaw_confidence),
+        "touches_border": bool(touches_border),
+        "area": area,
+        "bbox_area": bbox_area,
+        "fill_ratio": fill_ratio,
+        "aspect": aspect,
+        "mean_bgr": mean_bgr(image, mask, bbox),
+        "color": color_name,
+        "score": area * fill_ratio,
+    }
+
+
+def split_wide_component(mask, contour, min_area):
+    x, y, w, h = cv2.boundingRect(contour)
+    if h <= 0 or float(w) / float(h) < 1.45:
+        return [contour]
+
+    roi = mask[y:y + h, x:x + w]
+    projection = np.sum(roi > 0, axis=0).astype(np.float32)
+    if projection.size < 12 or float(projection.max()) <= 0.0:
+        return [contour]
+
+    left = max(2, int(round(w * 0.30)))
+    right = min(w - 2, int(round(w * 0.70)))
+    if right <= left:
+        return [contour]
+
+    split = left + int(np.argmin(projection[left:right]))
+    parts = []
+    for x0, x1 in ((0, split), (split, w)):
+        part = np.zeros_like(mask)
+        part[y:y + h, x + x0:x + x1] = roi[:, x0:x1]
+        part_contours = cv2.findContours(part, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        part_contours = part_contours[0] if len(part_contours) == 2 else part_contours[1]
+        if not part_contours:
+            continue
+        largest = max(part_contours, key=cv2.contourArea)
+        if float(cv2.contourArea(largest)) >= min_area:
+            parts.append(largest)
+
+    if len(parts) >= 2:
+        return parts
+    return [contour]
+
+
+def find_mask_proposals(image, mask, color_name, min_area, max_area_ratio):
     contours = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
-
     image_area = float(image.shape[0] * image.shape[1])
     proposals = []
     for contour in contours:
-        area = float(cv2.contourArea(contour))
-        if area < min_area:
-            continue
-        x, y, w, h = cv2.boundingRect(contour)
-        if w <= 0 or h <= 0:
-            continue
-        bbox_area = float(w * h)
-        if bbox_area > max_area_ratio * image_area:
-            continue
-        fill_ratio = area / bbox_area
-        aspect = float(w) / float(h)
-        if fill_ratio < 0.22:
-            continue
-        if aspect < 0.25 or aspect > 4.0:
-            continue
+        for contour in split_wide_component(mask, contour, min_area):
+            area = float(cv2.contourArea(contour))
+            if area < min_area:
+                continue
+            x, y, w, h = cv2.boundingRect(contour)
+            if w <= 0 or h <= 0:
+                continue
+            bbox_area = float(w * h)
+            if bbox_area > max_area_ratio * image_area:
+                continue
+            fill_ratio = area / bbox_area
+            aspect = float(w) / float(h)
+            if fill_ratio < 0.22:
+                continue
+            if aspect < 0.25 or aspect > 4.0:
+                continue
+            proposals.append(contour_to_proposal(image, mask, contour, color_name))
+    return proposals
 
-        bbox = [int(x), int(y), int(x + w), int(y + h)]
-        rotated_rect = rotated_rect_from_contour(contour)
-        touches_border = x <= 1 or y <= 1 or x + w >= image.shape[1] - 1 or y + h >= image.shape[0] - 1
-        yaw_confidence = rotated_rect["rectangularity"]
-        proposals.append(
-            {
-                "bbox": bbox,
-                "grasp_pixel": contour_center(contour, bbox),
-                "rotated_rect": rotated_rect,
-                "yaw_deg": rotated_rect["angle_deg"],
-                "yaw_reliable": bool((not touches_border) and yaw_confidence >= 0.08),
-                "yaw_confidence": float(yaw_confidence),
-                "touches_border": bool(touches_border),
-                "area": area,
-                "bbox_area": bbox_area,
-                "fill_ratio": fill_ratio,
-                "aspect": aspect,
-                "mean_bgr": mean_bgr(image, mask, bbox),
-                "score": area * fill_ratio,
-            }
-        )
+
+def propose_blocks(image, min_area=500.0, max_area_ratio=0.55):
+    mask, score, otsu_threshold, used_threshold = build_foreground_mask(image)
+    proposals = []
+    for color_name, color_mask in build_color_masks(image, mask):
+        proposals.extend(find_mask_proposals(image, color_mask, color_name, min_area, max_area_ratio))
+
+    if not proposals:
+        proposals = find_mask_proposals(image, mask, "foreground", min_area, max_area_ratio)
 
     proposals.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
     for index, proposal in enumerate(proposals, start=1):
