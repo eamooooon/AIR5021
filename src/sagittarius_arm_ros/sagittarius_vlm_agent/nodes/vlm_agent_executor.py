@@ -3,6 +3,7 @@
 
 import os
 import re
+import signal
 import sys
 import traceback
 
@@ -84,6 +85,10 @@ class VlmAgentExecutor:
             "default_pick_roll": get_robot_param("default_pick_roll", 0.0),
             "default_pick_pitch": get_robot_param("default_pick_pitch", 1.57),
             "default_pick_yaw": get_robot_param("default_pick_yaw", 0.0),
+            "use_detected_pick_yaw": get_robot_param("use_detected_pick_yaw", True),
+            "require_reliable_pick_yaw": get_robot_param("require_reliable_pick_yaw", False),
+            "pick_yaw_offset": get_robot_param("pick_yaw_offset", 1.5708),
+            "pick_yaw_scale": get_robot_param("pick_yaw_scale", 1.0),
             "observe_x": get_robot_param("observe_x", 0.20),
             "observe_y": get_robot_param("observe_y", 0.00),
             "observe_z": get_robot_param("observe_z", 0.15),
@@ -91,6 +96,12 @@ class VlmAgentExecutor:
             "pre_grasp_offset_z": get_robot_param("pre_grasp_offset_z", 0.05),
             "lift_offset_z": get_robot_param("lift_offset_z", 0.08),
             "place_z": get_robot_param("place_z", 0.05),
+            "default_block_height": get_robot_param("default_block_height", 0.03),
+            "min_estimated_block_height": get_robot_param("min_estimated_block_height", 0.015),
+            "max_estimated_block_height": get_robot_param("max_estimated_block_height", 0.03),
+            "place_on_target_clearance": get_robot_param("place_on_target_clearance", 0.0),
+            "stack_pre_place_offset_z": get_robot_param("stack_pre_place_offset_z", 0.03),
+            "max_place_approach_z": get_robot_param("max_place_approach_z", 0.12),
             "place_roll": get_robot_param("place_roll", 0.0),
             "place_pitch": get_robot_param("place_pitch", 1.57),
             "place_yaw": get_robot_param("place_yaw", 1.57),
@@ -144,6 +155,20 @@ class VlmAgentExecutor:
             self.motion_tools = MotionTools(self.robot_config["robot_name"], self.robot_config["arm_name"], self.prompt)
         self.registry = ToolRegistry(self.vision_tools, self.robot_tools, self.motion_tools)
         self.planner = AgentPlanner(self.api_base, self.api_key, self.model, self.request_timeout, rospy_module=rospy)
+        self.install_signal_handlers()
+
+    def install_signal_handlers(self):
+        def handle_signal(signum, _frame):
+            message = "Received signal %s; saving agent state before shutdown" % signum
+            rospy.logwarn(message)
+            try:
+                self.memory.append_log("WARN", message)
+                self.memory.save_snapshot()
+            finally:
+                rospy.signal_shutdown(message)
+
+        signal.signal(signal.SIGINT, handle_signal)
+        signal.signal(signal.SIGTERM, handle_signal)
 
     def parse_template_task(self):
         prompt = self.prompt.strip().lower()
@@ -296,8 +321,23 @@ class VlmAgentExecutor:
 
 def main():
     rospy.init_node("vlm_agent_executor", anonymous=False)
-    executor = VlmAgentExecutor()
-    executor.execute()
+    executor = None
+    try:
+        executor = VlmAgentExecutor()
+        executor.execute()
+    except BaseException as exc:
+        if executor is not None:
+            payload = {
+                "error": str(exc),
+                "type": exc.__class__.__name__,
+                "traceback": traceback.format_exc(),
+            }
+            try:
+                executor.memory.append_log("ERROR", "VLM agent process exiting with exception", payload)
+                executor.memory.save_snapshot()
+            except Exception as log_exc:
+                rospy.logerr("Failed to save final agent log: %s", log_exc)
+        raise
 
 
 if __name__ == "__main__":

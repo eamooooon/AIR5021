@@ -20,6 +20,10 @@ robot:
   default_pick_roll: 0.0
   default_pick_pitch: 1.57
   default_pick_yaw: 0.0
+  use_detected_pick_yaw: true
+  require_reliable_pick_yaw: false
+  pick_yaw_offset: 1.5708
+  pick_yaw_scale: 1.0
   observe_x: 0.20
   observe_y: 0.00
   observe_z: 0.15
@@ -27,6 +31,12 @@ robot:
   pre_grasp_offset_z: 0.05
   lift_offset_z: 0.08
   place_z: 0.05
+  default_block_height: 0.03
+  min_estimated_block_height: 0.015
+  max_estimated_block_height: 0.03
+  place_on_target_clearance: 0.0
+  stack_pre_place_offset_z: 0.03
+  max_place_approach_z: 0.12
   place_roll: 0.0
   place_pitch: 1.57
   place_yaw: 1.57

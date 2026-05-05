@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
 import threading
 
 import cv2
@@ -12,15 +11,6 @@ from sensor_msgs.msg import Image
 
 from block_proposer import annotate_proposals, propose_blocks
 from object_selector import ObjectSelector
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SAGITTARIUS_ARM_ROS_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-PERCEPTION_DIR = os.path.join(SAGITTARIUS_ARM_ROS_DIR, "sagittarius_perception")
-OBJECT_NODES = os.path.join(PERCEPTION_DIR, "sagittarius_object_color_detector", "nodes")
-CLEANER_NODES = os.path.join(PERCEPTION_DIR, "sagittarius_vlm_cleaner", "nodes")
-for path in (OBJECT_NODES, CLEANER_NODES):
-    if path not in sys.path:
-        sys.path.insert(0, path)
 
 
 class VisionTools:
@@ -131,6 +121,7 @@ class VisionTools:
         for proposal in proposals:
             bbox, grasp_pixel = self.normalize_bbox_and_grasp(proposal["bbox"], proposal["grasp_pixel"], frame.shape)
             robot_xy = robot_tools.pixel_to_robot_xy(grasp_pixel[0], grasp_pixel[1])
+            estimated_block_height = robot_tools.estimate_block_height(proposal)
             object_id = self.memory.add_object(
                 label=proposal["id"],
                 bbox=bbox,
@@ -138,7 +129,7 @@ class VisionTools:
                 robot_xy=list(robot_xy),
                 confidence=1.0,
                 gripper_width=0.02,
-                yaw_deg=proposal["yaw_deg"] if proposal["yaw_reliable"] else 0.0,
+                yaw_deg=proposal["yaw_deg"],
                 rationale="Local block proposal generated from foreground segmentation.",
                 object_id=proposal["id"],
                 extra={
@@ -146,6 +137,7 @@ class VisionTools:
                     "yaw_reliable": proposal["yaw_reliable"],
                     "yaw_confidence": proposal["yaw_confidence"],
                     "mean_bgr": proposal["mean_bgr"],
+                    "estimated_block_height": estimated_block_height,
                 },
             )
             detected.append(self.memory.objects[object_id])

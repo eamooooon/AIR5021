@@ -9,8 +9,16 @@ import rospy
 import yaml
 from actionlib_msgs.msg import GoalStatus
 
-from sagittarius_object_color_detector.msg import SGRCtrlAction, SGRCtrlGoal
+from sagittarius_vlm_agent.msg import SGRCtrlAction, SGRCtrlGoal
 from sdk_sagittarius_arm.srv import ServoRtInfo, ServoRtInfoRequest
+
+
+def as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 class RobotTools:
@@ -24,6 +32,10 @@ class RobotTools:
         self.default_pick_roll = float(config["default_pick_roll"])
         self.default_pick_pitch = float(config["default_pick_pitch"])
         self.default_pick_yaw = float(config["default_pick_yaw"])
+        self.use_detected_pick_yaw = as_bool(config["use_detected_pick_yaw"])
+        self.require_reliable_pick_yaw = as_bool(config["require_reliable_pick_yaw"])
+        self.pick_yaw_offset = float(config["pick_yaw_offset"])
+        self.pick_yaw_scale = float(config["pick_yaw_scale"])
         self.observe_x = float(config["observe_x"])
         self.observe_y = float(config["observe_y"])
         self.observe_z = float(config["observe_z"])
@@ -31,6 +43,12 @@ class RobotTools:
         self.pre_grasp_offset_z = float(config["pre_grasp_offset_z"])
         self.lift_offset_z = float(config["lift_offset_z"])
         self.place_z = float(config["place_z"])
+        self.default_block_height = float(config["default_block_height"])
+        self.min_estimated_block_height = float(config["min_estimated_block_height"])
+        self.max_estimated_block_height = float(config["max_estimated_block_height"])
+        self.place_on_target_clearance = float(config["place_on_target_clearance"])
+        self.stack_pre_place_offset_z = float(config["stack_pre_place_offset_z"])
+        self.max_place_approach_z = float(config["max_place_approach_z"])
         self.place_roll = float(config["place_roll"])
         self.place_pitch = float(config["place_pitch"])
         self.place_yaw = float(config["place_yaw"])
@@ -83,6 +101,57 @@ class RobotTools:
 
     def pixel_to_robot_xy(self, pixel_x, pixel_y):
         return self.k1 * pixel_y + self.b1, self.k2 * pixel_x + self.b2
+
+    def estimate_block_height(self, proposal):
+        points = proposal.get("rotated_rect", {}).get("box_points", [])
+        if len(points) != 4:
+            return self.default_block_height
+        robot_points = [self.pixel_to_robot_xy(point[0], point[1]) for point in points]
+        side_lengths = []
+        for index in range(4):
+            x1, y1 = robot_points[index]
+            x2, y2 = robot_points[(index + 1) % 4]
+            side_lengths.append(math.hypot(x2 - x1, y2 - y1))
+        side_lengths = sorted(length for length in side_lengths if length > 0.0)
+        if not side_lengths:
+            return self.default_block_height
+        estimated = sum(side_lengths[1:3]) / 2.0 if len(side_lengths) >= 3 else side_lengths[0]
+        return max(self.min_estimated_block_height, min(estimated, self.max_estimated_block_height))
+
+    def normalize_yaw(self, yaw):
+        while yaw <= -math.pi:
+            yaw += 2.0 * math.pi
+        while yaw > math.pi:
+            yaw -= 2.0 * math.pi
+        return yaw
+
+    def resolve_pick_yaw(self, obj):
+        if not self.use_detected_pick_yaw:
+            return self.default_pick_yaw, {
+                "source": "default",
+                "yaw_deg": float(obj.get("yaw_deg", 0.0)),
+                "yaw_reliable": bool(obj.get("yaw_reliable", False)),
+            }
+
+        yaw_reliable = bool(obj.get("yaw_reliable", False))
+        if self.require_reliable_pick_yaw and not yaw_reliable:
+            return self.default_pick_yaw, {
+                "source": "default_unreliable_detection",
+                "yaw_deg": float(obj.get("yaw_deg", 0.0)),
+                "yaw_reliable": yaw_reliable,
+            }
+
+        yaw_deg = float(obj.get("yaw_deg", 0.0))
+        yaw = self.default_pick_yaw + self.pick_yaw_offset + math.radians(yaw_deg) * self.pick_yaw_scale
+        yaw = self.normalize_yaw(yaw)
+        return yaw, {
+            "source": "detected",
+            "yaw_deg": yaw_deg,
+            "yaw_reliable": yaw_reliable,
+            "pick_yaw": yaw,
+            "pick_yaw_offset": self.pick_yaw_offset,
+            "pick_yaw_scale": self.pick_yaw_scale,
+        }
 
     def clip_gripper_width(self, width):
         return max(self.min_gripper_width, min(width, self.max_gripper_width))
@@ -147,7 +216,7 @@ class RobotTools:
     def pick_object(self, object_id):
         obj = self.memory.get_object(object_id)
         grasp_x, grasp_y = obj["robot_xy"]
-        yaw = self.default_pick_yaw
+        yaw, yaw_info = self.resolve_pick_yaw(obj)
         self.open_gripper()
         self.send_pose_goal(grasp_x, grasp_y, self.pick_z + self.pre_grasp_offset_z, self.default_pick_roll, self.default_pick_pitch, yaw)
         self.send_pose_goal(grasp_x, grasp_y, self.pick_z, self.default_pick_roll, self.default_pick_pitch, yaw)
@@ -157,27 +226,94 @@ class RobotTools:
             raise RuntimeError("Grasp verification failed for %s: payload=%s" % (object_id, verification["payload"]))
         self.send_pose_goal(grasp_x, grasp_y, self.pick_z + self.lift_offset_z, self.default_pick_roll, self.default_pick_pitch, yaw)
         self.memory.held_object_id = object_id
-        return {"success": True, "object_id": object_id, "verification": verification}
+        return {
+            "success": True,
+            "object_id": object_id,
+            "verification": verification,
+            "grasp_xy": [grasp_x, grasp_y],
+            "yaw": yaw,
+            "yaw_info": yaw_info,
+        }
 
-    def resolve_place_xy(self, target_object_id="", slot_index=None):
+    def resolve_place_pose(self, target_object_id="", slot_index=None):
         if target_object_id:
             target = self.memory.get_object(target_object_id)
-            return target["robot_xy"][0], target["robot_xy"][1], "target_object"
+            target_height = float(target.get("estimated_block_height", self.default_block_height))
+            place_z = self.place_z + target_height + self.place_on_target_clearance
+            approach_z = min(place_z + self.stack_pre_place_offset_z, self.max_place_approach_z)
+            approach_z = max(approach_z, place_z)
+            return {
+                "x": target["robot_xy"][0],
+                "y": target["robot_xy"][1],
+                "place_z": place_z,
+                "approach_z": approach_z,
+                "retreat_z": approach_z,
+                "mode": "target_object",
+                "components": {
+                    "table_release_z": self.place_z,
+                    "target_height": target_height,
+                    "held_height": self.held_object_height(),
+                    "place_on_target_clearance": self.place_on_target_clearance,
+                    "stack_pre_place_offset_z": self.stack_pre_place_offset_z,
+                    "max_place_approach_z": self.max_place_approach_z,
+                    "target_object_id": target_object_id,
+                    "held_object_id": self.memory.held_object_id,
+                },
+            }
         if slot_index is None:
             slot_index = 0
         slot_index = max(0, min(int(slot_index), len(self.place_slots) - 1))
         slot_x, slot_y = self.place_slots[slot_index]
-        return slot_x, slot_y, "slot_%d" % slot_index
+        approach_z = min(self.place_z + self.pre_grasp_offset_z, self.max_place_approach_z)
+        approach_z = max(approach_z, self.place_z)
+        return {
+            "x": slot_x,
+            "y": slot_y,
+            "place_z": self.place_z,
+            "approach_z": approach_z,
+            "retreat_z": approach_z,
+            "mode": "slot_%d" % slot_index,
+            "components": {
+                "table_release_z": self.place_z,
+                "pre_grasp_offset_z": self.pre_grasp_offset_z,
+                "max_place_approach_z": self.max_place_approach_z,
+                "slot_index": slot_index,
+                "held_object_id": self.memory.held_object_id,
+                "held_height": self.held_object_height(),
+            },
+        }
+
+    def held_object_height(self):
+        if not self.memory.held_object_id:
+            return self.default_block_height
+        held = self.memory.objects.get(self.memory.held_object_id, {})
+        return float(held.get("estimated_block_height", self.default_block_height))
 
     def place_object(self, target_object_id="", slot_index=None):
-        place_x, place_y, mode = self.resolve_place_xy(target_object_id, slot_index)
-        self.send_pose_goal(place_x, place_y, self.place_z + self.pre_grasp_offset_z, self.place_roll, self.place_pitch, self.place_yaw)
-        self.send_pose_goal(place_x, place_y, self.place_z, self.place_roll, self.place_pitch, self.place_yaw)
+        pose = self.resolve_place_pose(target_object_id, slot_index)
+        place_x = pose["x"]
+        place_y = pose["y"]
+        place_z = pose["place_z"]
+        approach_z = pose["approach_z"]
+        retreat_z = pose["retreat_z"]
+        mode = pose["mode"]
+        self.memory.append_log("INFO", "Resolved place pose", pose)
+        self.send_pose_goal(place_x, place_y, approach_z, self.place_roll, self.place_pitch, self.place_yaw)
+        self.send_pose_goal(place_x, place_y, place_z, self.place_roll, self.place_pitch, self.place_yaw)
         self.open_gripper()
-        self.send_pose_goal(place_x, place_y, self.place_z + self.lift_offset_z, self.place_roll, self.place_pitch, self.place_yaw)
+        self.send_pose_goal(place_x, place_y, retreat_z, self.place_roll, self.place_pitch, self.place_yaw)
         released = self.memory.held_object_id
         self.memory.held_object_id = ""
-        return {"success": True, "released_object_id": released, "place_xy": [place_x, place_y], "mode": mode}
+        return {
+            "success": True,
+            "released_object_id": released,
+            "place_xy": [place_x, place_y],
+            "place_z": place_z,
+            "approach_z": approach_z,
+            "retreat_z": retreat_z,
+            "height_components": pose["components"],
+            "mode": mode,
+        }
 
     def return_home(self):
         goal = SGRCtrlGoal()

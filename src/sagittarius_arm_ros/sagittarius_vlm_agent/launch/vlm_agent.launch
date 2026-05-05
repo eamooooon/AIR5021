@@ -6,7 +6,7 @@
   <arg name="model" default=""/>
   <arg name="api_base" default=""/>
   <arg name="openai_api_key" default=""/>
-  <arg name="vision_config" default="$(find sagittarius_object_color_detector)/config/vision_config.yaml"/>
+  <arg name="vision_config" default="$(find sagittarius_vlm_agent)/config/vision_config.yaml"/>
   <arg name="agent_config" default="$(find sagittarius_vlm_agent)/config/agent.yaml"/>
   <arg name="ros_log_dir" default="/home/robotics/Team1/logs/ros"/>
   <arg name="motion_velocity_scaling" default="0.8"/>
@@ -20,13 +20,14 @@
     <arg name="robot_model" value="$(arg robot_model)"/>
   </include>
 
-  <node pkg="sagittarius_object_color_detector" type="sgr_ctrl.py" name="sgr_ctrl_node" output="screen" ns="$(arg robot_name)">
+  <node pkg="sagittarius_vlm_agent" type="sgr_ctrl.py" name="sgr_ctrl_node" output="screen" ns="$(arg robot_name)">
+    <param name="init_pose" value="false"/>
     <param name="max_velocity_scaling" value="$(arg motion_velocity_scaling)"/>
     <param name="max_acceleration_scaling" value="$(arg motion_acceleration_scaling)"/>
     <param name="execute_wait" value="$(arg motion_execute_wait)"/>
   </node>
 
-  <include file="$(find sagittarius_object_color_detector)/launch/usb_cam.launch">
+  <include file="$(find sagittarius_vlm_agent)/launch/usb_cam.launch">
     <arg name="video_dev" value="$(arg video_dev)"/>
   </include>
 
